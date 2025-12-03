@@ -1,14 +1,14 @@
 // backend/index.js
-import express from 'express';
-import cors from 'cors';
-import fs from 'fs';
-import path from 'path';
-import { exec } from 'child_process';
-import { v4 as uuidv4 } from 'uuid';
-import rateLimit from 'express-rate-limit';
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
-import Docker from 'dockerode';
+import express from "express";
+import cors from "cors";
+import fs from "fs";
+import path from "path";
+import { exec } from "child_process";
+import { v4 as uuidv4 } from "uuid";
+import rateLimit from "express-rate-limit";
+import { fileURLToPath } from "url";
+import { dirname } from "path";
+import Docker from "dockerode";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -34,33 +34,38 @@ const DOCKER_TIMEOUT_MS = 10000; // 10 second timeout
 const limiter = rateLimit({
   windowMs: 1 * 60 * 1000, // 1 minute window
   max: 20, // Max 20 requests per minute per IP
-  message: "Too many code execution requests. Please wait a minute before trying again.",
+  message:
+    "Too many code execution requests. Please wait a minute before trying again.",
   standardHeaders: true,
   legacyHeaders: false,
-  skip: (req) => req.method === 'OPTIONS',
+  skip: (req) => req.method === "OPTIONS",
 });
 app.use(limiter);
 
 // Process execution queue
 function processQueue() {
-  if (executionQueue.length > 0 && activeExecutions<MAX_CONCURRENT_EXECUTIONS) {
+  if (
+    executionQueue.length > 0 &&
+    activeExecutions < MAX_CONCURRENT_EXECUTIONS
+  ) {
     const task = executionQueue.shift();
     task();
   }
 }
 
-app.post('/run', (req, res) => {
+app.post("/run", (req, res) => {
   const { code, filename } = req.body;
   console.log(`\nReceived request for file: ${filename}`);
 
   if (!code || !filename) {
-    return res.status(400).json({ error: 'Code or filename not provided.' });
+    return res.status(400).json({ error: "Code or filename not provided." });
   }
 
   // Check queue size - reject if too many pending
   if (executionQueue.length >= 200) {
-    return res.status(503).json({ 
-      output: 'Server is currently overloaded. Please try again in a few moments.' 
+    return res.status(503).json({
+      output:
+        "Server is currently overloaded. Please try again in a few moments.",
     });
   }
 
@@ -76,49 +81,66 @@ async function executeCode(req, res) {
   try {
     const extension = path.extname(filename).substring(1);
     const uniqueId = uuidv4();
-    const tempDir = path.join(__dirname, 'temp');
+    const tempDir = path.join(__dirname, "temp");
     if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir);
-    
+
     let dockerImage, cmd, filePath, fileName;
-    
+
     switch (extension) {
-      case 'js':
-        dockerImage = 'devflow-nodejs:latest';
+      case "js":
+        dockerImage = "devflow-nodejs:latest";
         fileName = `${uniqueId}.js`;
         filePath = path.join(tempDir, fileName);
-        cmd = ['node', `/app/${fileName}`];
+        cmd = ["node", `/app/${fileName}`];
         break;
-      case 'py':
-        dockerImage = 'devflow-python:latest';
+      case "py":
+        dockerImage = "devflow-python:latest";
         fileName = `${uniqueId}.py`;
         filePath = path.join(tempDir, fileName);
-        cmd = ['python3', `/app/${fileName}`];
+        cmd = ["python3", `/app/${fileName}`];
         break;
-      case 'c':
-      case 'cpp':
-        dockerImage = 'devflow-cpp:latest';
-        const compiler = extension === 'c' ? 'gcc' : 'g++';
+      case "c":
+      case "cpp":
+        dockerImage = "devflow-cpp:latest";
+        const compiler = extension === "c" ? "gcc" : "g++";
         fileName = `${uniqueId}.${extension}`;
         const outputName = uniqueId;
         filePath = path.join(tempDir, fileName);
-        cmd = ['/bin/sh', '-c', `${compiler} /app/${fileName} -o /app/${outputName} && /app/${outputName}`];
+        cmd = [
+          "/bin/sh",
+          "-c",
+          `${compiler} /app/${fileName} -o /tmp/${outputName} && /tmp/${outputName}`,
+        ];
         break;
-      case 'java':
-        dockerImage = 'devflow-java:latest';
-        fileName = 'Main.java';
-        filePath = path.join(tempDir, `${uniqueId}.java`);
-        cmd = ['/bin/sh', '-c', `javac /app/Main.java && java -cp /app Main`];
+      case "java":
+        dockerImage = "devflow-java:latest";
+        // Create unique subdirectory for Java to avoid conflicts
+        const javaDir = path.join(tempDir, uniqueId);
+        if (!fs.existsSync(javaDir)) fs.mkdirSync(javaDir, { recursive: true });
+        fileName = "Main.java";
+        filePath = path.join(javaDir, fileName);
+        cmd = [
+          "/bin/sh",
+          "-c",
+          `javac -d /tmp /app/Main.java && java -cp /tmp Main`,
+        ];
         break;
       default:
         activeExecutions--;
         processQueue();
-        return res.status(400).json({ output: `Error: Language '${extension}' is not supported.` });
+        return res
+          .status(400)
+          .json({ output: `Error: Language '${extension}' is not supported.` });
     }
 
     // Write code to temp file
     fs.writeFileSync(filePath, code);
-    
+
     console.log(`Running code in Docker container: ${dockerImage}`);
+
+    // Determine the mount directory (for Java, use subdirectory; for others, use tempDir)
+    const mountDir =
+      extension === "java" ? path.join(tempDir, uniqueId) : tempDir;
 
     // Create and start Docker container with resource limits
     const container = await docker.createContainer({
@@ -131,20 +153,23 @@ async function executeCode(req, res) {
         MemorySwap: DOCKER_MEMORY_LIMIT, // Disable swap
         CpuPeriod: DOCKER_CPU_PERIOD,
         CpuQuota: DOCKER_CPU_QUOTA, // 50% of one CPU core
-        NetworkMode: 'none', // No network access for security
+        NetworkMode: "none", // No network access for security
         AutoRemove: true, // Auto-remove container after execution
-        Binds: [`${tempDir}:/app:ro`], // Mount temp dir as read-only
+        Binds: [`${mountDir}:/app:ro`], // Mount appropriate dir as read-only
       },
     });
 
     // Start container with timeout
-    const timeoutPromise = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error('Execution timeout (10s)')), DOCKER_TIMEOUT_MS)
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(
+        () => reject(new Error("Execution timeout (10s)")),
+        DOCKER_TIMEOUT_MS
+      )
     );
 
     const executionPromise = (async () => {
       await container.start();
-      
+
       // Get logs
       const logs = await container.logs({
         follow: true,
@@ -152,51 +177,67 @@ async function executeCode(req, res) {
         stderr: true,
       });
 
-      let output = '';
-      logs.on('data', (chunk) => {
-        output += chunk.toString('utf8');
+      let output = "";
+      logs.on("data", (chunk) => {
+        output += chunk.toString("utf8");
       });
 
       await container.wait();
-      
+
       return output;
     })();
 
     try {
       const output = await Promise.race([executionPromise, timeoutPromise]);
-      
-      // Cleanup temp file
-      fs.rmSync(filePath, { force: true });
+
+      // Cleanup temp file/directory
+      if (extension === "java") {
+        // Remove entire Java subdirectory
+        fs.rmSync(path.join(tempDir, uniqueId), {
+          force: true,
+          recursive: true,
+        });
+      } else {
+        fs.rmSync(filePath, { force: true });
+      }
 
       activeExecutions--;
       processQueue();
 
       // Clean output (remove Docker log headers)
-      const cleanOutput = output.replace(/[\x00-\x08]/g, '').trim();
-      return res.json({ output: cleanOutput || 'Program executed successfully with no output.' });
-
+      const cleanOutput = output.replace(/[\x00-\x08]/g, "").trim();
+      return res.json({
+        output: cleanOutput || "Program executed successfully with no output.",
+      });
     } catch (timeoutError) {
       // Kill container on timeout
       try {
         await container.kill();
         await container.remove({ force: true });
       } catch (killError) {
-        console.error('Error killing container:', killError.message);
+        console.error("Error killing container:", killError.message);
       }
 
-      fs.rmSync(filePath, { force: true });
+      // Cleanup temp file/directory
+      if (extension === "java") {
+        fs.rmSync(path.join(tempDir, uniqueId), {
+          force: true,
+          recursive: true,
+        });
+      } else {
+        fs.rmSync(filePath, { force: true });
+      }
 
       activeExecutions--;
       processQueue();
 
       return res.json({ output: `Error: ${timeoutError.message}` });
     }
-
   } catch (err) {
     console.error("Docker execution error:", err);
     activeExecutions--;
     processQueue();
-    return res.status(500).json({ output: `Server error: ${err.message}`});
+    return res.status(500).json({ output: `Server error: ${err.message}` });
   }
 }
 
