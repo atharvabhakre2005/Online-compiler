@@ -162,11 +162,12 @@ export default function Home() {
           return;
         }
         const newPath = addingInPath === '/' ? `/${name}` : `${addingInPath}/${name}`;
+        const defaultContent = extension === 'py' ? `# New file: ${name}\n` : `// New file: ${name}\n`;
         const newFile: FileNode = { 
           name, 
           type: 'file',
           path: newPath,
-          content: `// New file: ${name}\n` 
+          content: defaultContent 
         };
         setFiles(addNodeToTree(files, newFile, addingInPath));
         if (!openFiles.includes(newPath)) {

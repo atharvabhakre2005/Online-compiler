@@ -8,8 +8,8 @@ dotenv.config();
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 
-// Use the model we confirmed works: gemini-2.5-flash
-const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+// Use model from env or default
+const model = genAI.getGenerativeModel({ model: process.env.GEMINI_MODEL || "gemini-2.0-flash" });
 
 export const optimizeCode = async (code, language) => {
   try {

@@ -1,5 +1,14 @@
 {
+  "scripts": {
+    "start": "concurrently -n CHROMA,RAG,BACKEND,OPTIMIZER,FRONTEND -c blue,green,yellow,magenta,cyan \"cd RAG && chroma run --path ./chroma_db --port 8000\" \"cd RAG && node server.js\" \"cd Backend && node index.js\" \"cd optimizer && node server.js\" \"cd Frontend && npm run dev\"",
+    "start:backend": "cd Backend && node index.js",
+    "start:frontend": "cd Frontend && npm run dev",
+    "start:rag": "cd RAG && node server.js",
+    "start:optimizer": "cd optimizer && node server.js",
+    "start:chroma": "cd RAG && chroma run --path ./chroma_db --port 8000"
+  },
   "dependencies": {
+    "concurrently": "^9.1.2",
     "express-rate-limit": "^8.2.1",
     "react-resizable-panels": "^3.0.6"
   }

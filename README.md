@@ -176,7 +176,40 @@ node seedDocs.js
 
 ### Running the Application
 
-Start all 5 services in separate terminals:
+#### Quick Start (Recommended)
+
+Start all 5 services with a single command from the project root:
+
+```bash
+npm start
+```
+
+This launches all services concurrently with color-coded, labeled output:
+
+| Label | Service | Port |
+|-------|---------|------|
+| `[CHROMA]` | ChromaDB vector database | 8000 |
+| `[RAG]` | AI code assistance (RAG) | 8080 |
+| `[BACKEND]` | Code execution engine | 5000 |
+| `[OPTIMIZER]` | Code optimizer | 5001 |
+| `[FRONTEND]` | Next.js UI | 3000 |
+
+#### Running Individual Services
+
+You can also start services individually:
+
+```bash
+npm run start:chroma      # ChromaDB
+npm run start:rag         # RAG Service
+npm run start:backend     # Backend
+npm run start:optimizer   # Optimizer
+npm run start:frontend    # Frontend (Next.js)
+```
+
+Or manually in separate terminals:
+
+<details>
+<summary>Click to expand manual setup</summary>
 
 **Terminal 1: ChromaDB**
 ```bash
@@ -207,6 +240,8 @@ node server.js
 cd Frontend
 npm run dev
 ```
+
+</details>
 
 ### Access the Application
 

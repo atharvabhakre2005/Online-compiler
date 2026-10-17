@@ -6,7 +6,7 @@ dotenv.config();
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 // Default model
-const MODEL_NAME = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+const MODEL_NAME = process.env.GEMINI_MODEL || "gemini-2.0-flash";
 
 
 // ----------------------------------------------------------
@@ -77,7 +77,7 @@ export async function sendToAI(prompt) {
 // ----------------------------------------------------------
 export async function embed(text) {
   try {
-    const model = genAI.getGenerativeModel({ model: "text-embedding-004" });
+    const model = genAI.getGenerativeModel({ model: process.env.GEMINI_EMBEDDING_MODEL || "gemini-embedding-001" });
 
     const resp = await model.embedContent(text);
     return resp.embedding.values;
